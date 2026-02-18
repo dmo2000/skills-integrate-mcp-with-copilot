@@ -3,6 +3,85 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const adminToggle = document.getElementById("admin-toggle");
+  const adminMenu = document.getElementById("admin-menu");
+  const adminLoginButton = document.getElementById("admin-login");
+  const adminLogoutButton = document.getElementById("admin-logout");
+  const adminStatus = document.getElementById("admin-status");
+  const adminModal = document.getElementById("admin-modal");
+  const adminLoginForm = document.getElementById("admin-login-form");
+  const adminCancel = document.getElementById("admin-cancel");
+  const adminMessage = document.getElementById("admin-message");
+  const adminNotice = document.getElementById("admin-notice");
+
+  let adminToken = localStorage.getItem("adminToken");
+  let adminUsername = localStorage.getItem("adminUsername");
+  let isAdmin = false;
+
+  function setAdminState(token, username) {
+    adminToken = token;
+    adminUsername = username;
+    isAdmin = true;
+    localStorage.setItem("adminToken", token);
+    localStorage.setItem("adminUsername", username);
+    updateAdminUI();
+  }
+
+  function clearAdminState() {
+    adminToken = null;
+    adminUsername = null;
+    isAdmin = false;
+    localStorage.removeItem("adminToken");
+    localStorage.removeItem("adminUsername");
+    updateAdminUI();
+  }
+
+  function updateAdminUI() {
+    if (isAdmin) {
+      adminStatus.textContent = `Signed in as ${adminUsername}`;
+      adminStatus.classList.remove("hidden");
+      adminLoginButton.classList.add("hidden");
+      adminLogoutButton.classList.remove("hidden");
+      adminNotice.classList.add("hidden");
+    } else {
+      adminStatus.textContent = "";
+      adminStatus.classList.add("hidden");
+      adminLoginButton.classList.remove("hidden");
+      adminLogoutButton.classList.add("hidden");
+      adminNotice.classList.remove("hidden");
+    }
+
+    signupForm
+      .querySelectorAll("input, select, button")
+      .forEach((element) => {
+        element.disabled = !isAdmin;
+      });
+  }
+
+  async function verifyAdminToken() {
+    if (!adminToken) {
+      updateAdminUI();
+      return;
+    }
+
+    try {
+      const response = await fetch("/admin/verify", {
+        headers: {
+          "X-Admin-Token": adminToken,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setAdminState(adminToken, result.username);
+      } else {
+        clearAdminState();
+      }
+    } catch (error) {
+      clearAdminState();
+      console.error("Error verifying admin session:", error);
+    }
+  }
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -12,6 +91,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML =
+        '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -28,10 +109,12 @@ document.addEventListener("DOMContentLoaded", () => {
               <h5>Participants:</h5>
               <ul class="participants-list">
                 ${details.participants
-                  .map(
-                    (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
-                  )
+                  .map((email) => {
+                    const deleteButton = isAdmin
+                      ? `<button class="delete-btn" data-activity="${name}" data-email="${email}" type="button">Remove</button>`
+                      : "";
+                    return `<li><span class="participant-email">${email}</span>${deleteButton}</li>`;
+                  })
                   .join("")}
               </ul>
             </div>`
@@ -57,9 +140,11 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       // Add event listeners to delete buttons
-      document.querySelectorAll(".delete-btn").forEach((button) => {
-        button.addEventListener("click", handleUnregister);
-      });
+      if (isAdmin) {
+        document.querySelectorAll(".delete-btn").forEach((button) => {
+          button.addEventListener("click", handleUnregister);
+        });
+      }
     } catch (error) {
       activitiesList.innerHTML =
         "<p>Failed to load activities. Please try again later.</p>";
@@ -80,6 +165,9 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: {
+            "X-Admin-Token": adminToken || "",
+          },
         }
       );
 
@@ -114,6 +202,13 @@ document.addEventListener("DOMContentLoaded", () => {
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    if (!isAdmin) {
+      messageDiv.textContent = "Teacher login required to register students.";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      return;
+    }
+
     const email = document.getElementById("email").value;
     const activity = document.getElementById("activity").value;
 
@@ -124,6 +219,9 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/signup?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
+          headers: {
+            "X-Admin-Token": adminToken || "",
+          },
         }
       );
 
@@ -155,6 +253,80 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  adminToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    adminMenu.classList.toggle("hidden");
+  });
+
+  adminMenu.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  document.addEventListener("click", () => {
+    adminMenu.classList.add("hidden");
+  });
+
+  adminLoginButton.addEventListener("click", () => {
+    adminMenu.classList.add("hidden");
+    adminMessage.classList.add("hidden");
+    adminLoginForm.reset();
+    adminModal.classList.remove("hidden");
+  });
+
+  adminCancel.addEventListener("click", () => {
+    adminModal.classList.add("hidden");
+  });
+
+  adminLoginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const username = document.getElementById("admin-username").value;
+    const password = document.getElementById("admin-password").value;
+
+    try {
+      const response = await fetch("/admin/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setAdminState(result.token, result.username);
+        adminModal.classList.add("hidden");
+        fetchActivities();
+      } else {
+        adminMessage.textContent = result.detail || "Login failed.";
+        adminMessage.className = "message error";
+        adminMessage.classList.remove("hidden");
+      }
+    } catch (error) {
+      adminMessage.textContent = "Login failed. Please try again.";
+      adminMessage.className = "message error";
+      adminMessage.classList.remove("hidden");
+      console.error("Error logging in:", error);
+    }
+  });
+
+  adminLogoutButton.addEventListener("click", async () => {
+    adminMenu.classList.add("hidden");
+    try {
+      await fetch("/admin/logout", {
+        method: "POST",
+        headers: {
+          "X-Admin-Token": adminToken || "",
+        },
+      });
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+
+    clearAdminState();
+    fetchActivities();
+  });
+
   // Initialize app
-  fetchActivities();
+  verifyAdminToken().then(fetchActivities);
 });

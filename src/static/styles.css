@@ -24,6 +24,76 @@ header {
   border-radius: 5px;
 }
 
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 20px;
+}
+
+.header-titles {
+  text-align: left;
+}
+
+.admin-controls {
+  position: relative;
+}
+
+.icon-button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.icon-button svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.admin-menu {
+  position: absolute;
+  right: 0;
+  top: 52px;
+  background-color: #fff;
+  color: #333;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 10;
+}
+
+.admin-menu button {
+  width: 100%;
+  background-color: #f0f2ff;
+  color: #1a237e;
+  border: 1px solid #c5c9f0;
+  font-size: 14px;
+}
+
+.admin-menu button:hover {
+  background-color: #dde2ff;
+}
+
+.admin-status {
+  font-size: 14px;
+  color: #1a237e;
+  font-weight: bold;
+}
+
 header h1 {
   margin-bottom: 10px;
 }
@@ -38,6 +108,17 @@ main {
 @media (min-width: 768px) {
   main {
     grid-template-columns: 2fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  header {
+    text-align: left;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
@@ -149,6 +230,12 @@ section h3 {
   font-size: 16px;
 }
 
+.form-group input:disabled,
+.form-group select:disabled {
+  background-color: #f0f0f0;
+  color: #777;
+}
+
 button {
   background-color: #1a237e;
   color: white;
@@ -162,6 +249,11 @@ button {
 
 button:hover {
   background-color: #3949ab;
+}
+
+button:disabled {
+  background-color: #9fa4d6;
+  cursor: not-allowed;
 }
 
 .message {
@@ -190,6 +282,41 @@ button:hover {
 
 .hidden {
   display: none;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 35, 126, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 20;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+button.secondary {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+button.secondary:hover {
+  background-color: #cfcfcf;
 }
 
 footer {
