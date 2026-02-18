@@ -5,19 +5,60 @@ A super simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+import json
 import os
 from pathlib import Path
+import secrets
+from typing import Optional
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
 
 # Mount the static files directory
 current_dir = Path(__file__).parent
+teachers_path = current_dir / "teachers.json"
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
+
+admin_sessions = {}
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+def load_teachers():
+    try:
+        with open(teachers_path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Teacher credentials not configured"
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Teacher credentials are invalid"
+        ) from exc
+
+    teachers = {}
+    for entry in data.get("teachers", []):
+        username = entry.get("username")
+        password = entry.get("password")
+        if username and password:
+            teachers[username] = password
+    return teachers
+
+
+def validate_admin_token(admin_token: Optional[str]):
+    if not admin_token or admin_token not in admin_sessions:
+        raise HTTPException(status_code=403, detail="Admin login required")
 
 # In-memory activity database
 activities = {
@@ -88,9 +129,42 @@ def get_activities():
     return activities
 
 
+@app.post("/admin/login")
+def admin_login(payload: LoginRequest):
+    teachers = load_teachers()
+    if teachers.get(payload.username) != payload.password:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    token = secrets.token_urlsafe(24)
+    admin_sessions[token] = payload.username
+    return {"token": token, "username": payload.username}
+
+
+@app.post("/admin/logout")
+def admin_logout(admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token")):
+    if not admin_token or admin_token not in admin_sessions:
+        raise HTTPException(status_code=401, detail="Not logged in")
+
+    admin_sessions.pop(admin_token, None)
+    return {"message": "Logged out"}
+
+
+@app.get("/admin/verify")
+def admin_verify(admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token")):
+    if not admin_token or admin_token not in admin_sessions:
+        raise HTTPException(status_code=401, detail="Not logged in")
+
+    return {"username": admin_sessions[admin_token]}
+
+
 @app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
+def signup_for_activity(
+    activity_name: str,
+    email: str,
+    admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token")
+):
     """Sign up a student for an activity"""
+    validate_admin_token(admin_token)
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -111,8 +185,13 @@ def signup_for_activity(activity_name: str, email: str):
 
 
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
+def unregister_from_activity(
+    activity_name: str,
+    email: str,
+    admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token")
+):
     """Unregister a student from an activity"""
+    validate_admin_token(admin_token)
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
